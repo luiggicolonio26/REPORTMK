@@ -15,14 +15,6 @@ let probed = false;
 
 export const storageMode = () => mode;
 
-const localKeys = () => {
-  try {
-    return Object.keys(localStorage).filter((k) => k.startsWith(PREFIX));
-  } catch {
-    return [];
-  }
-};
-
 function localGet(date) {
   try {
     const raw = localStorage.getItem(PREFIX + date);
@@ -41,10 +33,15 @@ function localSet(date, data) {
   }
 }
 
-/** Detect once whether a shared store is configured on the server. */
+/**
+ * Detect once whether a shared store is configured on the server.
+ * A rejected access key leaves `probed` false on purpose: the caller shows the
+ * gate and calls this again with a key, and that second call has to reach the
+ * server. Marking it probed here would make the retry a no-op, and every
+ * password — right or wrong — would appear to work.
+ */
 export async function initStore() {
   if (probed) return mode;
-  probed = true;
   try {
     const r = await apiGet("/api/history?probe=1");
     mode = r.configured ? "cloud" : "local";
@@ -52,6 +49,7 @@ export async function initStore() {
     if (e instanceof ApiError && e.status === 401) throw e; // ask for the access key
     mode = "local";
   }
+  probed = true;
   return mode;
 }
 
@@ -91,16 +89,4 @@ export async function saveMany(days) {
   }
   if (!ok && days.length) throw new Error("This browser will not let the app store anything (private mode?).");
   return ok;
-}
-
-export async function listDays() {
-  if (mode === "cloud") {
-    try {
-      const r = await apiGet("/api/history?list=1");
-      if (Array.isArray(r.dates)) return r.dates;
-    } catch { /* fall through */ }
-  }
-  return localKeys()
-    .map((k) => k.slice(PREFIX.length))
-    .sort();
 }

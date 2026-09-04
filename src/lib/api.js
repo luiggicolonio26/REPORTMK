@@ -3,19 +3,24 @@
 
 const KEY_STORE = "reportmk:apikey";
 
+/* Private-mode browsers throw on localStorage. Without this fallback the key
+   would never stick and the access gate would reappear on every request. */
+let memoryKey = "";
+
 export const getAppKey = () => {
   try {
-    return localStorage.getItem(KEY_STORE) || "";
+    return localStorage.getItem(KEY_STORE) || memoryKey;
   } catch {
-    return "";
+    return memoryKey;
   }
 };
 
 export const setAppKey = (v) => {
+  memoryKey = v || "";
   try {
     if (v) localStorage.setItem(KEY_STORE, v);
     else localStorage.removeItem(KEY_STORE);
-  } catch { /* private mode — the key just won't persist */ }
+  } catch { /* not persisted, but it lasts the session */ }
 };
 
 export class ApiError extends Error {

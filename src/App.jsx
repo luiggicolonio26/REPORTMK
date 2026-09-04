@@ -4,7 +4,7 @@ import { analyse, buildFacts } from "./lib/analysis.js";
 import { f0, f1, money } from "./lib/format.js";
 import { fetchWeather } from "./lib/weather.js";
 import { parseHistory } from "./lib/importer.js";
-import { initStore, loadDay, saveDay, saveMany, storageMode } from "./lib/store.js";
+import { initStore, loadDay, saveDay, saveMany } from "./lib/store.js";
 import { ApiError, getAppKey, setAppKey, streamReport, weatherBySearch } from "./lib/api.js";
 
 const CHIPS = [
@@ -35,7 +35,7 @@ const Text = ({ id, label, value, onChange, ph }) => (
   </div>
 );
 
-function AccessGate({ onUnlock }) {
+function AccessGate({ onUnlock, busy, error }) {
   const [value, setValue] = useState("");
   return (
     <div className="rd">
@@ -44,13 +44,16 @@ function AccessGate({ onUnlock }) {
         <p className="note" style={{ marginTop: 0 }}>
           This deployment is protected. Enter the key set on the server to use it.
         </p>
-        <form onSubmit={(e) => { e.preventDefault(); onUnlock(value.trim()); }}>
+        <form onSubmit={(e) => { e.preventDefault(); if (!busy) onUnlock(value.trim()); }}>
           <input type="password" value={value} autoFocus placeholder="Access key"
                  onChange={(e) => setValue(e.target.value)} />
           <div style={{ marginTop: 12 }}>
-            <button className="btn" type="submit" disabled={!value.trim()}>Open</button>
+            <button className="btn" type="submit" disabled={busy || !value.trim()}>
+              {busy ? "Checking…" : "Open"}
+            </button>
           </div>
         </form>
+        {error && <div className="msg err">{error}</div>}
       </div>
     </div>
   );
@@ -58,6 +61,8 @@ function AccessGate({ onUnlock }) {
 
 export default function App() {
   const [locked, setLocked] = useState(false);
+  const [gateError, setGateError] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState("local");
 
@@ -139,20 +144,40 @@ export default function App() {
 
   useEffect(() => () => abort.current?.abort(), []);
 
+  /* A rejected key must be reported inside the gate — the main screen's message
+     line is not on screen while the gate is up. */
   const unlock = async (key) => {
     setAppKey(key);
+    setGateError("");
+    setUnlocking(true);
     try {
       const m = await initStore();
       setMode(m);
       setLocked(false);
       setReady(true);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) {
-        setAppKey("");
-        say("That key was not accepted.", true);
-      }
+      setAppKey("");
+      setGateError(
+        e instanceof ApiError && e.status === 401
+          ? "That key was not accepted."
+          : `Could not reach the server: ${e.message}`
+      );
+    } finally {
+      setUnlocking(false);
     }
   };
+
+  /* A 401 during normal use means the key was changed on the server. Send the
+     user back to the gate instead of failing every action from now on. */
+  const fail = useCallback((e, whatFailed) => {
+    if (e instanceof ApiError && e.status === 401) {
+      setAppKey("");
+      setGateError("The access key is no longer valid. Enter the current one.");
+      setLocked(true);
+      return;
+    }
+    say(`${whatFailed}: ${e.message}`, true);
+  }, [say]);
 
   const loadWeather = async (which) => {
     const day = which === "today" ? date : lyKey;
@@ -192,7 +217,7 @@ export default function App() {
         ? "Day saved to the shared history. It comes back as next year's comparison."
         : "Day saved in this browser. It comes back as next year's comparison here.");
     } catch (e) {
-      say(`The day could not be saved: ${e.message}`, true);
+      fail(e, "The day could not be saved");
     }
   };
 
@@ -211,7 +236,7 @@ export default function App() {
         if (v) setLy({ sales: str(v.sales), traffic: str(v.traffic), transactions: str(v.transactions), units: str(v.units) });
       }
     } catch (e) {
-      say(`Import failed: ${e.message}`, true);
+      fail(e, "Import failed");
     }
   };
 
@@ -228,7 +253,7 @@ export default function App() {
       setReport(out);
       say(out ? "Report written. Save the day to keep it." : "The model returned nothing. Try again.", !out);
     } catch (e) {
-      if (e.name !== "AbortError") say(`The report could not be generated: ${e.message}`, true);
+      if (e.name !== "AbortError") fail(e, "The report could not be generated");
     } finally {
       setBusy(false);
     }
@@ -244,7 +269,7 @@ export default function App() {
     }
   };
 
-  if (locked) return <AccessGate onUnlock={unlock} />;
+  if (locked) return <AccessGate onUnlock={unlock} busy={unlocking} error={gateError} />;
 
   const { T, L, dSales, toTarget } = a;
 
