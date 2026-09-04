@@ -30,13 +30,17 @@ fixed.
 
    | Provider | Cost | Sign-up | Notes |
    |---|---|---|---|
-   | `GROQ_API_KEY` | free | email or Google/GitHub, no card, no phone | Llama 3.3 70B. ~1,000 reports a day. |
+   | `GROQ_API_KEY` | free | email or Google/GitHub, no card, no phone | Open-weight models. ~1,000 reports a day. |
    | `MISTRAL_API_KEY` | free | needs phone verification | Best privacy posture of the free tiers. |
    | `ANTHROPIC_API_KEY` | ~$0.04 a report | card required | Sharpest reports, and the only one that can look up past weather by web search. |
 
    Set `LLM_PROVIDER` (`groq` / `mistral` / `anthropic`) only if more than one
-   key is present — otherwise the app refuses to guess. `LLM_MODEL` overrides
-   the provider's default model.
+   key is present — otherwise the app refuses to guess.
+
+   Leave `LLM_MODEL` unset and the app asks the provider which models the
+   account can use and picks the best one. Groq and Mistral retire model IDs
+   every few months, so a pinned name eventually 404s; set `LLM_MODEL` only to
+   force a specific model.
 
    Switching provider is these two variables and a redeploy. No code changes.
 

@@ -11,7 +11,7 @@ export const PROVIDERS = {
     keyVar: "GROQ_API_KEY",
     kind: "openai",
     baseUrl: "https://api.groq.com/openai/v1",
-    defaultModel: "llama-3.3-70b-versatile",
+    defaultModel: "openai/gpt-oss-120b",
     webSearch: false,
   },
   mistral: {
@@ -93,15 +93,73 @@ export function pickProvider(env = process.env) {
 }
 
 function resolve(name, spec, env) {
+  const pinned = String(env.LLM_MODEL || "").trim();
   return {
     name,
     label: spec.label,
     kind: spec.kind,
     baseUrl: spec.baseUrl,
     apiKey: env[spec.keyVar],
-    model: String(env.LLM_MODEL || "").trim() || spec.defaultModel,
+    model: pinned || spec.defaultModel,
+    pinned: Boolean(pinned),
     webSearch: spec.webSearch,
   };
+}
+
+/* ---------------- model discovery ----------------
+ * Groq and Mistral retire model IDs every few months, and a hard-coded default
+ * turns into a 404 the day they do. When LLM_MODEL is not pinned, the model is
+ * chosen from what the account can actually see, best first.
+ */
+
+const PREFERENCE = {
+  groq: [/^openai\/gpt-oss-120b$/, /gpt-oss-120b/, /qwen3/, /llama.*70b/, /llama-4/, /gpt-oss/, /llama/],
+  mistral: [/^mistral-medium-latest$/, /^mistral-small-latest$/, /mistral-small/, /mistral-medium/, /mistral-large/, /mistral/],
+  anthropic: [/^claude-opus-5$/, /claude-opus/, /claude-sonnet/, /claude/],
+};
+
+/* Speech, safety and embedding models answer /models too, but cannot write a report. */
+const NOT_A_CHAT_MODEL = /whisper|tts|guard|embed|moderation|rerank|ocr|voxtral|distil/i;
+
+let cached = null; // { provider, model } — survives while the lambda stays warm
+
+export async function listModels(provider) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const res = await fetch(`${provider.baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${provider.apiKey}` },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return (body?.data ?? [])
+      .filter((m) => m?.id && !NOT_A_CHAT_MODEL.test(m.id))
+      /* Mistral advertises per-model capabilities; honour them where present. */
+      .filter((m) => m.capabilities?.completion_chat !== false)
+      .map((m) => m.id);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function chooseModel(available, providerName, fallback) {
+  for (const pattern of PREFERENCE[providerName] ?? []) {
+    const hit = available.find((id) => pattern.test(id));
+    if (hit) return hit;
+  }
+  return available[0] ?? fallback;
+}
+
+async function modelFor(provider) {
+  if (provider.pinned) return provider.model;
+  if (cached?.provider === provider.name) return cached.model;
+  const available = await listModels(provider);
+  const model = chooseModel(available, provider.name, provider.model);
+  if (available.length) cached = { provider: provider.name, model };
+  return model;
 }
 
 /* ---------------- streaming ---------------- */
@@ -147,6 +205,7 @@ async function streamAnthropic({ provider, system, user, maxTokens, onText }) {
 }
 
 async function streamOpenAICompatible({ provider, system, user, maxTokens, onText }) {
+  const model = await modelFor(provider);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   let res;
@@ -158,7 +217,7 @@ async function streamOpenAICompatible({ provider, system, user, maxTokens, onTex
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: provider.model,
+        model,
         max_tokens: maxTokens,
         temperature: 0.3, // a trading report should not be inventive
         stream: true,
@@ -172,7 +231,7 @@ async function streamOpenAICompatible({ provider, system, user, maxTokens, onTex
 
     if (!res.ok) {
       clearTimeout(timer);
-      throw new ProviderError(await describeFailure(res, provider), res.status, "upstream_error");
+      throw new ProviderError(await describeFailure(res, provider, model), res.status, "upstream_error");
     }
 
     let out = "";
@@ -206,7 +265,7 @@ async function streamOpenAICompatible({ provider, system, user, maxTokens, onTex
   }
 }
 
-async function describeFailure(res, provider) {
+async function describeFailure(res, provider, model) {
   const body = await res.text().catch(() => "");
   let detail = body.slice(0, 300);
   try {
@@ -218,7 +277,11 @@ async function describeFailure(res, provider) {
     return `${provider.label} rejected the API key. Check it in the Vercel project settings.`;
   }
   if (res.status === 404) {
-    return `${provider.label} does not know the model "${provider.model}". Set LLM_MODEL to a model your account can use.`;
+    /* Almost always a retired model ID. Name the ones that do work. */
+    const available = await listModels(provider);
+    return available.length
+      ? `${provider.label} has retired "${model}". Models your account can use: ${available.slice(0, 8).join(", ")}. Set LLM_MODEL to one of them.`
+      : `${provider.label} does not know the model "${model}". Set LLM_MODEL to a model your account can use.`;
   }
   if (res.status === 429) {
     return `${provider.label}'s free limit is spent for now. It resets on their schedule — try again later.`;
