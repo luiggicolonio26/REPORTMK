@@ -28,7 +28,7 @@ fixed.
 
    | Variable | Required | What it does |
    |---|---|---|
-   | `ANTHROPIC_API_KEY` | yes | Writes the report. Get one at [console.anthropic.com](https://console.anthropic.com/settings/keys). |
+   | `ANTHROPIC_API_KEY` | yes | Writes the report. Get one at [platform.claude.com/settings/keys](https://platform.claude.com/settings/keys). Pay-as-you-go, separate from a Claude.ai subscription; set a spend limit under [Settings → Limits](https://platform.claude.com/settings/limits). |
    | `APP_PASSWORD` | recommended | Anyone with the URL can otherwise spend your API credit. Set it and the site asks for the key once per browser. |
    | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | optional | Shared history across computers. |
 
