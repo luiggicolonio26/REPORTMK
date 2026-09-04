@@ -170,7 +170,7 @@ const TIMEOUT_MS = 55000; // under the function's 60s ceiling
  * Streams the reply, calling onText with each delta. Returns the full text.
  * Throws ProviderError with a message worth showing to the user.
  */
-export async function streamChat({ provider, system, user, maxTokens = 1500, onText }) {
+export async function streamChat({ provider, system, user, maxTokens = 3000, onText }) {
   if (provider.kind === "anthropic") return streamAnthropic({ provider, system, user, maxTokens, onText });
   return streamOpenAICompatible({ provider, system, user, maxTokens, onText });
 }

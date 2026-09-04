@@ -135,3 +135,10 @@ the weather in. In practice this almost never comes up.
 The report is generated from a facts brief the app builds. The store notes go
 into it as data, and the system prompt states they are data — a note typed into
 the box cannot re-instruct the model.
+
+The report is one and a half paragraphs of prose, not a bulleted summary: how
+the day went, and — when it fell short of the compared day — what the drivers
+attribute the shortfall to. Asking a model *why* a day went badly is the exact
+pressure that produces invented causes, so the prompt says outright that "the
+figures do not explain this, and here is what to check" is the correct answer
+whenever the data does not carry one.

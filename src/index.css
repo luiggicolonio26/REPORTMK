@@ -72,7 +72,10 @@ body {
 .rd .btn:disabled { opacity: 0.5; cursor: default; }
 .rd .btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); padding: 6px 11px; font-size: 12.5px; }
 
-.rd .out { white-space: pre-wrap; line-height: 1.55; font-size: 14px; min-height: 120px; }
+.rd .out {
+  white-space: pre-wrap; line-height: 1.65; font-size: 15px; min-height: 120px;
+  max-width: 62ch; /* a comfortable measure — prose gets unreadable past this */
+}
 .rd .empty { color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 
 .rd .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; font-size: 13px; margin-top: 12px; }
