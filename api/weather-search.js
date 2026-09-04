@@ -1,7 +1,11 @@
-import { anthropic, MODEL, FALLBACK, textOf } from "./_lib/anthropic.js";
+import { pickProvider } from "./_lib/provider.js";
 import { authorised, isDateKey, json, methodGuard, readJson } from "./_lib/http.js";
 
-/** Last-resort weather lookup for days the open-meteo endpoints have no record of. */
+/**
+ * Last-resort weather lookup for days open-meteo has no record of. It needs a
+ * provider with a built-in web search tool, which today means Anthropic; on
+ * Groq or Mistral the app falls back to typing the weather in by hand.
+ */
 export default async function handler(req, res) {
   if (!methodGuard(req, res, ["POST"])) return;
   if (!authorised(req, res)) return;
@@ -9,16 +13,25 @@ export default async function handler(req, res) {
   const { date } = await readJson(req);
   if (!isDateKey(date)) return json(res, 400, { error: "Invalid date", code: "bad_request" });
 
-  let client;
+  let provider;
   try {
-    client = anthropic();
+    provider = pickProvider();
   } catch (e) {
     return json(res, e.status ?? 500, { error: e.message, code: e.code ?? "server_error" });
   }
 
+  if (!provider.webSearch) {
+    return json(res, 501, {
+      error: `${provider.label} cannot search the web, so the weather has to be typed in.`,
+      code: "no_web_search",
+    });
+  }
+
   try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: provider.apiKey, maxRetries: 1 });
     const message = await client.beta.messages.create({
-      model: MODEL,
+      model: provider.model,
       max_tokens: 4000,
       output_config: { effort: "low" },
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 4 }],
@@ -33,14 +46,19 @@ export default async function handler(req, res) {
             `If you cannot find the day, reply {"desc":"","tmax":null,"rain":null}.`,
         },
       ],
-      ...FALLBACK,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
     });
 
     if (message.stop_reason === "refusal") {
       return json(res, 422, { error: "No weather found for that day", code: "not_found" });
     }
 
-    const text = textOf(message).replace(/```json|```/g, "");
+    const text = (message.content ?? [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .replace(/```json|```/g, "");
     const match = text.match(/\{[\s\S]*?\}/);
     if (!match) return json(res, 502, { error: "No weather found for that day", code: "not_found" });
 

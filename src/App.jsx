@@ -170,7 +170,14 @@ export default function App() {
         set({ desc: str(w.desc), tmax: str(w.tmax), rain: str(w.rain) });
         say(`Weather found by web search for ${day}. Worth a quick check.`);
       } catch (e) {
-        say(`No weather found for ${day} (${e.message}). Type it in.`, true);
+        /* no_web_search just means this provider has no search tool — open-meteo
+           had already come up empty, so the honest answer is "type it in". */
+        say(
+          e.code === "no_web_search"
+            ? `No weather record for ${day}. Type it in.`
+            : `No weather found for ${day} (${e.message}). Type it in.`,
+          true
+        );
       }
     } finally {
       setLoadingW(null);

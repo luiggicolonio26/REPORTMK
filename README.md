@@ -24,12 +24,27 @@ fixed.
 1. Import this repository at [vercel.com/new](https://vercel.com/new). The Vite
    preset is detected automatically; the `api/` folder becomes serverless
    functions.
-2. **Settings → Environment Variables**, then redeploy:
+2. **Settings → Environment Variables**, then redeploy.
+
+   The report needs a model provider — set **exactly one** of these keys:
+
+   | Provider | Cost | Sign-up | Notes |
+   |---|---|---|---|
+   | `GROQ_API_KEY` | free | email or Google/GitHub, no card, no phone | Llama 3.3 70B. ~1,000 reports a day. |
+   | `MISTRAL_API_KEY` | free | needs phone verification | Best privacy posture of the free tiers. |
+   | `ANTHROPIC_API_KEY` | ~$0.04 a report | card required | Sharpest reports, and the only one that can look up past weather by web search. |
+
+   Set `LLM_PROVIDER` (`groq` / `mistral` / `anthropic`) only if more than one
+   key is present — otherwise the app refuses to guess. `LLM_MODEL` overrides
+   the provider's default model.
+
+   Switching provider is these two variables and a redeploy. No code changes.
+
+   Also worth setting:
 
    | Variable | Required | What it does |
    |---|---|---|
-   | `ANTHROPIC_API_KEY` | yes | Writes the report. Get one at [platform.claude.com/settings/keys](https://platform.claude.com/settings/keys). Pay-as-you-go, separate from a Claude.ai subscription; set a spend limit under [Settings → Limits](https://platform.claude.com/settings/limits). |
-   | `APP_PASSWORD` | recommended | Anyone with the URL can otherwise spend your API credit. Set it and the site asks for the key once per browser. |
+   | `APP_PASSWORD` | recommended | Anyone with the URL can otherwise use your API allowance. Set it and the site asks for the key once per browser. |
    | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | optional | Shared history across computers. |
 
 ### Shared history (optional)
@@ -62,8 +77,9 @@ src/lib/kpi.js         conversion, ATV, AUR, UPT and the variances
 src/lib/weather.js     open-meteo, archive and forecast endpoints
 src/lib/analysis.js    everything the screen and the report both need
 src/lib/store.js       localStorage, or the shared store when configured
-api/report.js          Claude, streamed back so a slow day cannot time out
-api/weather-search.js  fallback lookup for days open-meteo has no record of
+api/_lib/provider.js   Groq / Mistral / Anthropic behind one interface
+api/report.js          the report, streamed so a slow day cannot time out
+api/weather-search.js  fallback lookup, where the provider can search the web
 api/history.js         shared history, backed by Redis over HTTP
 ```
 
@@ -102,6 +118,13 @@ api/history.js         shared history, backed by Redis over HTTP
 12. **Copy failed silently** when the clipboard was blocked.
 13. **No error ever reached the user** — every failure path caught and discarded
     the reason. Errors now say what went wrong.
+
+## Weather on providers without web search
+
+Weather comes from open-meteo, which covers 1940 to sixteen days ahead and
+needs no key. The web-search fallback only exists for days it has no record of,
+and only Anthropic can run it — on Groq or Mistral the app says so and you type
+the weather in. In practice this almost never comes up.
 
 ## Note on the prompt
 
