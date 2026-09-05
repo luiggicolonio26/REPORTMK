@@ -78,6 +78,8 @@ above in a local `.env` (see `.env.example`).
 src/lib/dates.js       day keys, weekday handling, the -364 day comparison
 src/lib/holidays.js    NL / DE (NRW) / BE public holidays, Easter included
 src/lib/kpi.js         conversion, ATV, AUR, UPT and the variances
+src/lib/season.js      where the day sits in the outerwear selling year
+src/lib/mix.js         best sellers and the customer nationality split
 src/lib/weather.js     open-meteo, archive and forecast endpoints
 src/lib/analysis.js    everything the screen and the report both need
 src/lib/store.js       localStorage, or the shared store when configured
@@ -136,9 +138,13 @@ The report is generated from a facts brief the app builds. The store notes go
 into it as data, and the system prompt states they are data — a note typed into
 the box cannot re-instruct the model.
 
-The report is one and a half paragraphs of prose, not a bulleted summary: how
-the day went, and — when it fell short of the compared day — what the drivers
-attribute the shortfall to. Asking a model *why* a day went badly is the exact
+The report is prose, not a bulleted summary: how the day went, what the drivers
+attribute the result to, and — where they were recorded — what sold and who
+bought it, read against the season.
+
+Which KPIs beat last year is decided in `analyse()`, not by the model, and the
+prompt may only credit the team on that list. A report that congratulates the
+team on a metric that actually fell is worse than one that says nothing. Asking a model *why* a day went badly is the exact
 pressure that produces invented causes, so the prompt says outright that "the
 figures do not explain this, and here is what to check" is the correct answer
 whenever the data does not carry one.

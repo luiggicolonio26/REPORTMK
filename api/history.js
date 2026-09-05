@@ -12,6 +12,18 @@ const parse = (raw) => {
   }
 };
 
+/** Name/value rows, capped in both length and count. */
+const rows = (list, max, nameLen) =>
+  Array.isArray(list)
+    ? list
+        .slice(0, max)
+        .map((r) => ({
+          name: String(r?.name ?? "").slice(0, nameLen),
+          value: String(r?.value ?? "").slice(0, 12),
+        }))
+        .filter((r) => r.name || r.value)
+    : [];
+
 /** Only the fields the app actually stores, so a day cannot be used as free storage. */
 function clean(data) {
   if (!data || typeof data !== "object") return null;
@@ -28,6 +40,8 @@ function clean(data) {
       rain: str(data.weather?.rain, 12),
     },
     chips: Array.isArray(data.chips) ? data.chips.slice(0, 20).map((c) => str(c, 60)) : [],
+    sellers: rows(data.sellers, 8, 40),
+    mix: rows(data.mix, 10, 40),
     notes: str(data.notes, 4000),
     report: str(data.report, 8000),
     savedAt: new Date().toISOString(),
@@ -91,7 +105,10 @@ export default async function handler(req, res) {
       const existing = await pipeline(days.map((d) => ["GET", DAY(d.date)]));
       const writes = days.map((d, i) => {
         const prev = parse(existing[i]) || {};
-        const merged = clean({ ...prev, ...d.values, weather: prev.weather, chips: prev.chips });
+        const merged = clean({
+          ...prev, ...d.values,
+          weather: prev.weather, chips: prev.chips, sellers: prev.sellers, mix: prev.mix,
+        });
         return ["SET", DAY(d.date), JSON.stringify(merged)];
       });
       await pipeline([...writes, ["SADD", INDEX, ...days.map((d) => d.date)]]);

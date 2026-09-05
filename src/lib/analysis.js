@@ -2,6 +2,8 @@ import { ADD, dow, human, isDateKey, lastYear, PARSE } from "./dates.js";
 import { holidays } from "./holidays.js";
 import { f0, f1, money, signed } from "./format.js";
 import { isNoisy, kpi, num, pctChange, ppDiff } from "./kpi.js";
+import { season } from "./season.js";
+import { bestSellers, customerMix } from "./mix.js";
 
 /** Everything the screen and the report both need, derived once. */
 export function analyse({ date, basis, today, ly }) {
@@ -40,7 +42,36 @@ export function analyse({ date, basis, today, ly }) {
     dAur: pctChange(T.aur, L.aur),
     dUpt: pctChange(T.upt, L.upt),
     noisy: isNoisy(dSales, T.tx),
+    season: valid ? season(d) : null,
+    /* Which KPIs beat last year is arithmetic, not judgement. Deciding it here
+       means the report can never congratulate the team on a metric that fell. */
+    ...movement(T, L),
   };
+}
+
+const METRICS = [
+  { key: "conv", label: "conversion", unit: "pp" },
+  { key: "atv", label: "ATV", unit: "%" },
+  { key: "aur", label: "AUR", unit: "%" },
+  { key: "upt", label: "UPT", unit: "%" },
+  { key: "traffic", label: "traffic", unit: "%" },
+  { key: "units", label: "units", unit: "%" },
+  { key: "sales", label: "net sales", unit: "%" },
+];
+
+function movement(T, L) {
+  const ahead = [];
+  const behind = [];
+  for (const { key, label, unit } of METRICS) {
+    const delta = unit === "pp" ? ppDiff(T[key], L[key]) : pctChange(T[key], L[key]);
+    if (delta === null) continue;
+    const text = `${label} ${signed(delta)}${unit === "pp" ? "pp" : "%"}`;
+    /* A flat metric is neither a win nor a loss; treating it as one produces
+       hollow praise, which costs the report its credibility. */
+    if (delta > 0.05) ahead.push(text);
+    else if (delta < -0.05) behind.push(text);
+  }
+  return { ahead, behind };
 }
 
 const list = (hs) => hs.map((x) => `${x.region}: ${x.name}`).join(" · ");
@@ -50,7 +81,9 @@ const w = (x) =>
   } mm`;
 
 /** The plain-text brief the model reports on. Facts only, no instructions. */
-export function buildFacts(a, { basis, wToday, wLy, chips, notes }) {
+export function buildFacts(a, { basis, wToday, wLy, chips, notes, sellers = [], mix = [] }) {
+  const top = bestSellers(sellers, a.T.units);
+  const who = customerMix(mix);
   const { d, lyRef, lySame, T, L, target } = a;
   return `
 DATE: ${human(d)} (${dow(d)})
@@ -94,6 +127,28 @@ TRAFFIC vs LY: ${signed(a.dTraffic)}% | CONVERSION vs LY: ${signed(
   )}% | UPT vs LY: ${signed(a.dUpt)}%
 WEATHER TODAY: ${w(wToday)}
 WEATHER ON THE COMPARED DAY: ${w(wLy)}
+AHEAD OF LAST YEAR: ${a.ahead.length ? a.ahead.join(", ") : "nothing"}
+BEHIND LAST YEAR: ${a.behind.length ? a.behind.join(", ") : "nothing"}
+SEASON: ${
+    a.season
+      ? `${a.season.name}, ${a.season.monthName}. Outerwear year: ${a.season.phase}.${
+          a.season.transition ? ` Changeover: ${a.season.transition}.` : ""
+        }`
+      : "unknown"
+  }
+BEST SELLERS TODAY: ${
+    top.length
+      ? top
+          .map((r) => `${r.name} ${f0(r.units)} units${r.share === null ? "" : ` (${f1(r.share)}% of units)`}`)
+          .join("; ")
+      : "not recorded"
+  }
+CUSTOMER MIX TODAY: ${
+    who.items.length
+      ? who.items.map((r) => `${r.name} ${f1(r.pct)}%`).join("; ") +
+        (who.balanced ? "" : ` — WARNING: these add up to ${f1(who.total)}%, not 100%, so treat the split as unreliable`)
+      : "not recorded"
+  }
 STORE CONTEXT: ${chips.length ? chips.join("; ") : "nothing flagged"}
 NOTES: ${(notes || "none").slice(0, 4000)}
 RELIABILITY: ${

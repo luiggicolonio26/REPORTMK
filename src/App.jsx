@@ -4,6 +4,7 @@ import { analyse, buildFacts } from "./lib/analysis.js";
 import { f0, f1, money } from "./lib/format.js";
 import { fetchWeather } from "./lib/weather.js";
 import { parseHistory } from "./lib/importer.js";
+import { customerMix, emptyRow } from "./lib/mix.js";
 import { initStore, loadDay, saveDay, saveMany } from "./lib/store.js";
 import { ApiError, getAppKey, setAppKey, streamReport, weatherBySearch } from "./lib/api.js";
 
@@ -34,6 +35,51 @@ const Text = ({ id, label, value, onChange, ph }) => (
     <input id={id} value={value} placeholder={ph} onChange={(e) => onChange(e.target.value)} />
   </div>
 );
+
+/* One editable list of name/number rows — best sellers and customer mix are
+   the same shape, so they share the control. */
+const RowList = ({ id, rows, onChange, nameLabel, valueLabel, suffix, placeholder, suggestions = [] }) => {
+  const set = (i, field, v) => onChange(rows.map((r, n) => (n === i ? { ...r, [field]: v } : r)));
+  const remove = (i) => onChange(rows.length === 1 ? [emptyRow()] : rows.filter((_, n) => n !== i));
+
+  return (
+    <div>
+      <div className="rowhead">
+        <span className="lbl">{nameLabel}</span>
+        <span className="lbl">{valueLabel}</span>
+        <span />
+      </div>
+      {rows.map((r, i) => (
+        <div className="rowline" key={i}>
+          <input id={`${id}-name-${i}`} value={r.name} placeholder={placeholder}
+                 aria-label={`${nameLabel} ${i + 1}`}
+                 onChange={(e) => set(i, "name", e.target.value)} />
+          <div className="suffixed">
+            <input type="number" inputMode="decimal" value={r.value} placeholder="0"
+                   aria-label={`${valueLabel} ${i + 1}`}
+                   onChange={(e) => set(i, "value", e.target.value)} />
+            {suffix && <span>{suffix}</span>}
+          </div>
+          <button type="button" className="xbtn" aria-label={`Remove row ${i + 1}`}
+                  onClick={() => remove(i)}>×</button>
+        </div>
+      ))}
+      <div className="bar" style={{ marginTop: 6 }}>
+        <button type="button" className="btn ghost" onClick={() => onChange([...rows, emptyRow()])}>
+          Add line
+        </button>
+        {suggestions
+          .filter((sg) => !rows.some((r) => r.name.toLowerCase() === sg.toLowerCase()))
+          .map((sg) => (
+            <button key={sg} type="button" className="chip"
+                    onClick={() => onChange([...rows.filter((r) => r.name || r.value), { name: sg, value: "" }])}>
+              + {sg}
+            </button>
+          ))}
+      </div>
+    </div>
+  );
+};
 
 function AccessGate({ onUnlock, busy, error }) {
   const [value, setValue] = useState("");
@@ -74,6 +120,8 @@ export default function App() {
   const [wLy, setWLy] = useState(EMPTY_W);
   const [chips, setChips] = useState([]);
   const [notes, setNotes] = useState("");
+  const [sellers, setSellers] = useState([emptyRow()]);
+  const [mix, setMix] = useState([emptyRow()]);
   const [report, setReport] = useState("");
 
   const [busy, setBusy] = useState(false);
@@ -87,6 +135,8 @@ export default function App() {
 
   const a = useMemo(() => analyse({ date, basis, today, ly }), [date, basis, today, ly]);
   const lyKey = a.valid ? KEY(a.lyRef) : null;
+  const who = useMemo(() => customerMix(mix), [mix]);
+  const seasonNote = a.season ? `${a.season.name}, ${a.season.phase}` : "the time of year";
 
   /* ---- storage: is a shared history configured, or are we browser-local? ---- */
   useEffect(() => {
@@ -120,6 +170,8 @@ export default function App() {
       setWToday(v?.weather ? { desc: str(v.weather.desc), tmax: str(v.weather.tmax), rain: str(v.weather.rain) } : EMPTY_W);
       setChips(Array.isArray(v?.chips) ? v.chips : []);
       setNotes(str(v?.notes));
+      setSellers(Array.isArray(v?.sellers) && v.sellers.length ? v.sellers : [emptyRow()]);
+      setMix(Array.isArray(v?.mix) && v.mix.length ? v.mix : [emptyRow()]);
       setReport(str(v?.report));
     })();
     return () => { stop = true; };
@@ -212,7 +264,7 @@ export default function App() {
   const save = async () => {
     if (!isDateKey(date)) return say("Pick a valid date first.", true);
     try {
-      const { where } = await saveDay(date, { ...today, weather: wToday, chips, notes, report });
+      const { where } = await saveDay(date, { ...today, weather: wToday, chips, notes, sellers, mix, report });
       say(where === "cloud"
         ? "Day saved to the shared history. It comes back as next year's comparison."
         : "Day saved in this browser. It comes back as next year's comparison here.");
@@ -248,7 +300,7 @@ export default function App() {
     abort.current?.abort();
     abort.current = new AbortController();
     try {
-      const facts = buildFacts(a, { basis, wToday, wLy, chips, notes });
+      const facts = buildFacts(a, { basis, wToday, wLy, chips, notes, sellers, mix });
       const out = await streamReport(facts, setReport, abort.current.signal);
       setReport(out);
       say(out ? "Report written. Save the day to keep it." : "The model returned nothing. Try again.", !out);
@@ -387,6 +439,40 @@ export default function App() {
             <p className="note">
               Without this the report can only blame the weather. Thirty seconds here is worth more than all the KPIs.
             </p>
+          </div>
+
+          <div className="card">
+            <h2>Best sellers</h2>
+            <RowList
+              id="sellers" rows={sellers} onChange={setSellers}
+              nameLabel="Product type" valueLabel="Units" placeholder="Parkas, down jackets…"
+              suggestions={["Parkas", "Down jackets", "Gilets", "Rainwear", "Knitwear", "Accessories"]}
+            />
+            <p className="note">
+              Product types, not single styles. The report reads them against the season — {seasonNote} — and says
+              whether the mix is what that would lead you to expect.
+            </p>
+          </div>
+
+          <div className="card">
+            <h2>Where customers came from</h2>
+            <RowList
+              id="mix" rows={mix} onChange={setMix}
+              nameLabel="Nationality" valueLabel="Share" suffix="%" placeholder="German, Dutch…"
+              suggestions={["German", "Dutch", "Belgian", "Other"]}
+            />
+            <div className="note" style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <span>Roughly, as a share of the day. One day is not a trend; a season of them is.</span>
+              {who.items.length > 0 && (
+                <b className={who.balanced ? "" : "warnnum"}>{f1(who.total)}%</b>
+              )}
+            </div>
+            {!who.balanced && who.items.length > 0 && (
+              <div className="flag">
+                These add up to {f1(who.total)}%, not 100%. Fix them before writing the report — it will otherwise
+                say the split cannot be trusted.
+              </div>
+            )}
           </div>
 
           <div className="card">

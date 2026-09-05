@@ -91,3 +91,22 @@ body {
   border-radius: 3px; padding: 2px 7px; background: #fff;
 }
 .rd .gate { max-width: 420px; margin: 60px auto; }
+
+/* name / number row lists — best sellers, customer mix */
+.rd .rowhead, .rd .rowline {
+  display: grid; grid-template-columns: minmax(0, 1fr) 110px 30px; gap: 8px; align-items: center;
+}
+.rd .rowhead { margin-bottom: 2px; }
+.rd .rowhead .lbl { margin-bottom: 0; }
+.rd .rowline { margin-bottom: 6px; }
+.rd .suffixed { position: relative; display: flex; align-items: center; }
+.rd .suffixed span {
+  position: absolute; right: 9px; color: var(--muted); font-size: 12px; pointer-events: none;
+}
+.rd .suffixed input { padding-right: 26px; }
+.rd .xbtn {
+  border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 4px;
+  width: 30px; height: 32px; font-size: 16px; line-height: 1; cursor: pointer; padding: 0;
+}
+.rd .xbtn:hover { color: var(--down); border-color: var(--down); }
+.rd .warnnum { color: var(--down); }
