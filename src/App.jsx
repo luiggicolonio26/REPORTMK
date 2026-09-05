@@ -7,6 +7,7 @@ import { parseHistory } from "./lib/importer.js";
 import { customerMix, emptyRow } from "./lib/mix.js";
 import { initStore, loadDay, saveDay, saveMany } from "./lib/store.js";
 import { ApiError, getAppKey, setAppKey, streamReport, weatherBySearch } from "./lib/api.js";
+import Logo from "./components/Logo.jsx";
 
 const CHIPS = [
   "Promotion running", "Size breaks", "NRW school holidays", "Event at the outlet",
@@ -86,6 +87,7 @@ function AccessGate({ onUnlock, busy, error }) {
   return (
     <div className="rd">
       <div className="card gate">
+        <div style={{ marginBottom: 14 }}><Logo /></div>
         <h2>Access key</h2>
         <p className="note" style={{ marginTop: 0 }}>
           This deployment is protected. Enter the key set on the server to use it.
@@ -327,13 +329,18 @@ export default function App() {
 
   return (
     <div className="rd">
-      <h1>End-of-day report</h1>
-      <p className="sub">
-        Roermond · check the day against last year before you write anything
-        <span className="mode" style={{ marginLeft: 8 }}>
-          {mode === "cloud" ? "shared history" : "history in this browser only"}
-        </span>
-      </p>
+      <header className="head">
+        <div>
+          <h1>End-of-day report</h1>
+          <p className="sub">
+            Roermond · check the day against last year before you write anything
+            <span className="mode" style={{ marginLeft: 8 }}>
+              {mode === "cloud" ? "shared history" : "history in this browser only"}
+            </span>
+          </p>
+        </div>
+        <Logo />
+      </header>
 
       <div className="grid">
         <div>

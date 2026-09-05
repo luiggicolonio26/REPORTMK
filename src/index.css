@@ -110,3 +110,21 @@ body {
 }
 .rd .xbtn:hover { color: var(--down); border-color: var(--down); }
 .rd .warnnum { color: var(--down); }
+
+/* brand lockup, top right of the header */
+.rd .head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 18px;
+}
+.rd .head .sub { margin-bottom: 0; }
+.rd .logo { display: flex; align-items: center; gap: 10px; color: var(--ink); flex-shrink: 0; }
+.rd .logo-mark { height: 40px; width: auto; display: block; }
+.rd .logo-word {
+  font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase;
+  font-family: "Times New Roman", Times, Georgia, serif; white-space: nowrap;
+}
+/* On a phone the wordmark crowds the title; the mark alone still reads. */
+@media (max-width: 560px) {
+  .rd .logo-word { display: none; }
+  .rd .logo-mark { height: 28px; }
+}

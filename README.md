@@ -83,6 +83,7 @@ src/lib/mix.js         best sellers and the customer nationality split
 src/lib/weather.js     open-meteo, archive and forecast endpoints
 src/lib/analysis.js    everything the screen and the report both need
 src/lib/store.js       localStorage, or the shared store when configured
+src/components/Logo.jsx  the brand lockup in the header
 api/_lib/provider.js   Groq / Mistral / Anthropic behind one interface
 api/report.js          the report, streamed so a slow day cannot time out
 api/weather-search.js  fallback lookup, where the provider can search the web
@@ -124,6 +125,13 @@ api/history.js         shared history, backed by Redis over HTTP
 12. **Copy failed silently** when the clipboard was blocked.
 13. **No error ever reached the user** — every failure path caught and discarded
     the reason. Errors now say what went wrong.
+
+## The logo
+
+`src/components/Logo.jsx` holds a vector redraw of the mark, so it stays sharp
+at any size and takes its colour from the surrounding text. To use the official
+artwork instead, drop the file into `public/` and swap the `<svg>` in that file
+for an `<img src="/logo.svg" className="logo-mark" />`. Nothing else changes.
 
 ## Weather on providers without web search
 
